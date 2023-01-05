@@ -1,7 +1,6 @@
-import React, {useEffect} from 'react';
-import logo from './logo.svg';
+import React, {useEffect, useState} from 'react';
 import {useSelector, useDispatch} from 'react-redux';
-import { setSize, addAllData, addSingleData } from './features/userData/userDataSlice';
+import {addAllData, addSingleData } from './features/userData/userDataSlice';
 import {ProgressBar} from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css'
 
@@ -18,7 +17,7 @@ function Card(props){
   return(
     <div id='card'>
         <div id='userAvatar'>
-          {(isSelected)?(<img src={singleData.avatar}></img>):"Placeholder"}
+          {(isSelected)?(<img alt={"User Avatar"} src={singleData.avatar}></img>):"Placeholder"}
         </div>
         <div id='userName'>
           {(isSelected)?(singleData.first_name + " " + singleData.last_name):"Placeholder"}
@@ -30,52 +29,77 @@ function Card(props){
   )
 }
 
+
 function App() {
-  const allData = useSelector((state)=> state.userData.allData)
+  //const allData = useSelector((state)=> state.userData.allData)
   const size = useSelector((state)=>state.userData.size)
   const singleData = useSelector((state)=>state.userData.singleData)
   const dispatch = useDispatch();
 
-  useEffect(()=>{
-    let fun = async () => {
-      let res = await fetch(base_url+all_users);
-      const reader = res.body.getReader();
-      const totalLength = res.headers.get("Content-Length");
-      
-      let receivedLength = 0;
-      let data = []
-      let completed = false;
-      while(!completed){
-        const {done, value} = await reader.read();
-        completed = done;
-        if(!completed){
-          receivedLength += value.length
-          data.push(value);
-        }
+  const [progress, setProgress] = useState(0);
+  const [loaded, setLoaded] = useState(false);
 
+  let fun = async (url, all_or_single) => {
+    let res1 = await fetch(url);
+    //const totalLength = res.headers.get("content-length");
+    /*Since the header doesn't have a content-length field I had to do a little hack here for calculating the total response size*/
+    const reader2 = res1.body.getReader();
+    let totalLength = 0;
+    while(true){
+      const {done, value} = await reader2.read();
+      if(done){
+        break;
       }
-      let allData = new Uint8Array(receivedLength)
-      console.log(data)
-      let pos = 0;
-      for(let chunk of data){
-        allData.set(chunk, pos);
-        pos+=chunk.length;
-      }
-      let str = new TextDecoder("utf-8").decode(allData);
-      let jso = JSON.parse(str)
-      dispatch(addAllData(jso.data))
+      totalLength += value.length
     }
-    fun()
+  
+    let res2 = await fetch(url);
+    const reader = res2.body.getReader();
+  
+    let receivedLength = 0;
+    let data = []
+    let completed = false;
+    while(!completed){
+      const {done, value} = await reader.read();
+      completed = done;
+      if(!completed){
+        receivedLength += value.length
+        console.log(receivedLength,totalLength)
+        setProgress(Math.floor((receivedLength/totalLength)*100))
+        data.push(value);
+      }
+  
+    }
+    let allData = new Uint8Array(receivedLength)
+    //console.log(progress)
+    let pos = 0;
+    for(let chunk of data){
+      allData.set(chunk, pos);
+      pos+=chunk.length;
+    }
+    let str = new TextDecoder("utf-8").decode(allData);
+    let jso = JSON.parse(str)
+    dispatch(all_or_single(jso.data))
+  }
+
+  useEffect(()=>{
+    fun(base_url+all_users, addAllData)
   }, [])
-  let isSelected = Object.keys(singleData).length!=0
+
+  useEffect(()=>{
+    if(progress===100){
+      setTimeout(()=>{
+        setProgress(0)
+        setLoaded(true)
+      }, 500)
+    }
+  })
+  let isSelected = Object.keys(singleData).length!==0
 
   let handleClick = (ev) => {
     let url = base_url + single_user + ev.target.id
-    fetch(url)
-      .then(res=>res.json())
-      .then((jso)=> jso.data)
-      .then((data)=>dispatch(addSingleData(data)))
-      .catch((err)=>console.error(err))
+    setLoaded(false)
+    fun(url, addSingleData)
   }
 
   return (
@@ -86,8 +110,8 @@ function App() {
           [...Array(size).keys()].map(ele=>ele+1).map((ele, idx) => <button id={ele} key={idx} onClick={handleClick}>{ele}</button>)
         }
       </div>
-      <div className='progressBar'>
-        <ProgressBar now={55}/>
+      <div id="progressIndicator">
+        {loaded?("Item Loaded"):(<ProgressBar now={progress}></ProgressBar>)}
       </div>
     </div>
   );
