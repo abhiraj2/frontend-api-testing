@@ -2,6 +2,9 @@ import React, {useEffect} from 'react';
 import logo from './logo.svg';
 import {useSelector, useDispatch} from 'react-redux';
 import { setSize, addAllData, addSingleData } from './features/userData/userDataSlice';
+import {ProgressBar} from 'react-bootstrap';
+import 'bootstrap/dist/css/bootstrap.min.css'
+
 import './App.css';
 
 
@@ -13,7 +16,7 @@ function Card(props){
   let isSelected = props.isSelected
   let singleData = props.singleData
   return(
-    <div id='display_area'>
+    <div id='card'>
         <div id='userAvatar'>
           {(isSelected)?(<img src={singleData.avatar}></img>):"Placeholder"}
         </div>
@@ -34,11 +37,35 @@ function App() {
   const dispatch = useDispatch();
 
   useEffect(()=>{
-    fetch(base_url+all_users)
-      .then((res)=> res.json())
-      .then((jso)=> jso.data)
-      .then((data)=> dispatch(addAllData(data)))
-      .catch((err)=>console.error(err))
+    let fun = async () => {
+      let res = await fetch(base_url+all_users);
+      const reader = res.body.getReader();
+      const totalLength = res.headers.get("Content-Length");
+      
+      let receivedLength = 0;
+      let data = []
+      let completed = false;
+      while(!completed){
+        const {done, value} = await reader.read();
+        completed = done;
+        if(!completed){
+          receivedLength += value.length
+          data.push(value);
+        }
+
+      }
+      let allData = new Uint8Array(receivedLength)
+      console.log(data)
+      let pos = 0;
+      for(let chunk of data){
+        allData.set(chunk, pos);
+        pos+=chunk.length;
+      }
+      let str = new TextDecoder("utf-8").decode(allData);
+      let jso = JSON.parse(str)
+      dispatch(addAllData(jso.data))
+    }
+    fun()
   }, [])
   let isSelected = Object.keys(singleData).length!=0
 
@@ -58,6 +85,9 @@ function App() {
         {
           [...Array(size).keys()].map(ele=>ele+1).map((ele, idx) => <button id={ele} key={idx} onClick={handleClick}>{ele}</button>)
         }
+      </div>
+      <div className='progressBar'>
+        <ProgressBar now={55}/>
       </div>
     </div>
   );
