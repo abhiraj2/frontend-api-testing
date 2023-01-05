@@ -31,6 +31,10 @@
 }
 
 #buttons > button{
+  background: none;
+  border-radius: 7px;
+  border: 1px solid grey;
+  background-color: #f5f6fa;
   width: 75px;
   font-size: 18px;
   cursor: pointer;
